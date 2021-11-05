@@ -194,7 +194,7 @@
     $('#fine-uploader-manual-trigger').fineUploader({
         template: 'qq-template-manual-trigger',
         request: {
-            endpoint: '/upload'
+            endpoint: '/uploadImageFile'
         },
         thumbnails: {
             placeholders: {
@@ -241,21 +241,22 @@
         $('#fine-uploader-manual-trigger').fineUploader('uploadStoredFiles');
     });
 
+
+
+
     loadImages()
-
-    var loding = layer.msg('数据加载中...', {
-        icon: 16
-        ,shade: 0.01
-        ,time: 0
-    });
-
     function loadImages() {
+        let loading = layer.msg('数据加载中...', {
+            icon: 16
+            , shade: 0.01
+            , time: 0
+        });
         $.ajax({
             url: "/images",
             type: "GET",
             data: {},
             beforeSend:function (){
-                loding
+                loading
             },
             success: function (d) {
 
@@ -268,6 +269,9 @@
                 }
 
                 $.each(d.data.images, function (index, value) {
+                    if(value.type === 'dir'){
+                        return true;
+                    }
                     $(".li-images").append(
                         "<li>" +
                         "<img data-img_path="+value.path+"  onError=\"handleErrorImg(this)\" src=" + value.download_url + ">" +
@@ -276,9 +280,7 @@
                         "</li>"
                     )
                 });
-            },
-            complete: function(){
-                layer.close(loding);
+                layer.close(loading);
             }
         });
     }

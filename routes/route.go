@@ -1,11 +1,12 @@
 package routes
 
 import (
-	"repo-image-hosting/bindata"
-	"repo-image-hosting/controller"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gin-gonic/gin"
 	"html/template"
+	"repo-image-hosting/bindata"
+	"repo-image-hosting/controller"
+	"repo-image-hosting/middlewares"
 	"strings"
 )
 
@@ -13,6 +14,7 @@ func InitRoute() *gin.Engine {
 	//router := gin.Default()
 	router := gin.New()
 	//router.LoadHTMLGlob("views/*")
+	router.Use(middlewares.Cors())
 
 	//加载模板文件
 	t, err := loadTemplate()
@@ -32,8 +34,8 @@ func InitRoute() *gin.Engine {
 	}
 	router.StaticFS("/static", &fs)
 
-
 	router.GET("/", controller.Index)
+	router.POST("/uploadImageFile", controller.ImgUploadFile)
 	router.POST("/upload", controller.ImgUpload)
 	router.GET("/images", controller.Images)
 	router.POST("/delete", controller.ImageDel)

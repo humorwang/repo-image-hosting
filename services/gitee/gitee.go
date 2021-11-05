@@ -1,4 +1,4 @@
-package github
+package gitee
 
 import (
 	"encoding/json"
@@ -14,44 +14,45 @@ import (
 	"time"
 )
 
-type GithubServe struct {
+type GiteeServe struct {
 	services.RepoInterface
 }
 
-func (serve *GithubServe) Push(filename, content string) (string, string, string) {
-	return Push(filename, config.Conf.App.Path, content)
+func (serve *GiteeServe) Push(filename, content string) (string, string, string) {
+	return PushGitee(filename, config.Conf.App.Path, content)
 }
 
-func (serve *GithubServe) GetFiles() []map[string]interface{} {
-	return GetFiles()
+func (serve *GiteeServe) GetFiles() []map[string]interface{} {
+	return GetGiteeFiles()
 }
 
-func (serve *GithubServe) Del(filepath, sha string) string {
+func (serve *GiteeServe) Del(filepath, sha string) string {
 	return DelFile(filepath, sha)
 }
 
-func (serve *GithubServe) PushHasPath(filename, filepath, content string) (string, string, string) {
-	return Push(filename, filepath, content)
+func (serve *GiteeServe) PushHasPath(filename, filepath, content string) (string, string, string) {
+	return PushGitee(filename, filepath, content)
 }
 
-func (serve *GithubServe) PushByBase64(imagesDto request.ImageDto) response.ImageDto {
+func (serve *GiteeServe) PushByBase64(imagesDto request.ImageDto) response.ImageDto {
 	imageData := response.ImageDto{}
 	imageType := strings.TrimLeft(strings.Split(imagesDto.Image, ";")[0], "data:")
 	imageExt := global.ImageExt[imageType]
 	timeStr := time.Now().Format("20060102150405")
 	filename := timeStr + "_" + services.GetRandomString(16) + imageExt
 	imageContent := strings.Split(imagesDto.Image, ",")[1]
-	url, path, sha := Push(filename, imagesDto.Path, imageContent)
+	url, path, sha := PushGitee(filename, imagesDto.Path, imageContent)
 	imageData.Url = url
 	imageData.Path = path
 	imageData.Sha = sha
 	return imageData
 }
 
-func Push(filename, filepath, content string) (string, string, string) {
+func PushGitee(filename, filepath, content string) (string, string, string) {
 
-	url := "https://api.github.com/repos/" + config.Conf.App.Owner + "/" + config.Conf.App.Repo + "/contents/" + filepath + "/" + filename
+	url := "https://gitee.com/api/v5/repos/" + config.Conf.App.Owner + "/" + config.Conf.App.Repo + "/contents/" + filepath + "/" + filename
 
+	// 初始化请求与响应
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer func() {
@@ -61,15 +62,14 @@ func Push(filename, filepath, content string) (string, string, string) {
 	}()
 
 	// 设置请求方法
-	req.Header.SetMethod("PUT")
+	req.Header.SetMethod("POST")
 	req.Header.SetBytesKV([]byte("Content-Type"), []byte("application/json"))
-	req.Header.SetBytesKV([]byte("Accept"), []byte("application/vnd.github.v3+json"))
-	req.Header.SetBytesKV([]byte("Authorization"), []byte("token "+config.Conf.App.Token))
 
 	// 设置请求的目标网址
 	req.SetRequestURI(url)
 
 	args := make(map[string]string)
+	args["access_token"] = config.Conf.App.Token
 	args["content"] = content
 	args["message"] = "upload pic for repo-image-hosting"
 	args["branch"] = config.Conf.App.Branch
@@ -100,9 +100,8 @@ func Push(filename, filepath, content string) (string, string, string) {
 
 	if ok {
 		if mapResult["content"] != nil {
-			path := mapResult["content"].(map[string]interface{})["path"].(string)
-			d = "https://cdn.jsdelivr.net/gh/" + config.Conf.App.Owner + "/" + config.Conf.App.Repo + "@" + config.Conf.App.Branch + "/" + path
-			p = path
+			d = mapResult["content"].(map[string]interface{})["download_url"].(string)
+			p = mapResult["content"].(map[string]interface{})["path"].(string)
 			s = mapResult["content"].(map[string]interface{})["sha"].(string)
 		}
 	}
@@ -110,15 +109,17 @@ func Push(filename, filepath, content string) (string, string, string) {
 	return d, p, s
 }
 
-func GetFiles() []map[string]interface{} {
-	// 初始化请求与响应
-	url := "https://api.github.com/repos/" +
+func GetGiteeFiles() []map[string]interface{} {
+
+	url := "https://gitee.com/api/v5/repos/" +
 		config.Conf.App.Owner + "/" +
 		config.Conf.App.Repo +
 		"/contents/" +
 		config.Conf.App.Path +
-		"?ref=" + config.Conf.App.Branch
+		"?access_token=" +
+		config.Conf.App.Token + "&ref=" + config.Conf.App.Branch
 
+	// 初始化请求与响应
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer func() {
@@ -129,8 +130,6 @@ func GetFiles() []map[string]interface{} {
 
 	// 设置请求方法
 	req.Header.SetMethod("GET")
-	req.Header.SetBytesKV([]byte("Accept"), []byte("application/vnd.github.v3+json"))
-	req.Header.SetBytesKV([]byte("Authorization"), []byte("token "+config.Conf.App.Token))
 	// 设置请求的目标网址
 	req.SetRequestURI(url)
 
@@ -142,8 +141,6 @@ func GetFiles() []map[string]interface{} {
 	// 获取响应的数据实体
 	body := resp.Body()
 
-	//log.Println(string(body),url)
-
 	var mapResult []map[string]interface{}
 
 	err := json.Unmarshal(body, &mapResult)
@@ -151,21 +148,17 @@ func GetFiles() []map[string]interface{} {
 		fmt.Println("JsonToMapDemo err: ", err)
 	}
 
-	for _, v := range mapResult {
-		v["download_url"] = "https://cdn.jsdelivr.net/gh/" + config.Conf.App.Owner + "/" + config.Conf.App.Repo + "@" + config.Conf.App.Branch + "/" + v["path"].(string)
-	}
 	return mapResult
 }
 
 func DelFile(filepath, sha string) string {
-	// 初始化请求与响应
-	url := "https://api.github.com/repos/" +
-		config.Conf.App.Owner + "/" +
-		config.Conf.App.Repo +
-		"/contents/" + filepath
 
+	url := "https://gitee.com/api/v5/repos/" + config.Conf.App.Owner + "/" + config.Conf.App.Repo + "/contents/" + filepath
+
+	// 初始化请求与响应
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
+
 	defer func() {
 		// 用完需要释放资源
 		fasthttp.ReleaseResponse(resp)
@@ -175,13 +168,12 @@ func DelFile(filepath, sha string) string {
 	// 设置请求方法
 	req.Header.SetMethod("DELETE")
 	req.Header.SetBytesKV([]byte("Content-Type"), []byte("application/json"))
-	req.Header.SetBytesKV([]byte("Accept"), []byte("application/vnd.github.v3+json"))
-	req.Header.SetBytesKV([]byte("Authorization"), []byte("token "+config.Conf.App.Token))
 
 	// 设置请求的目标网址
 	req.SetRequestURI(url)
 
 	args := make(map[string]string)
+	args["access_token"] = config.Conf.App.Token
 	args["sha"] = sha
 	args["message"] = "delete pic for repo-image-hosting"
 	args["branch"] = config.Conf.App.Branch

@@ -1,16 +1,17 @@
 package controller
 
 import (
-	"repo-image-hosting/services"
-	"repo-image-hosting/services/connector"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"os"
 	"path"
+	"repo-image-hosting/dto/request"
+	"repo-image-hosting/services"
+	"repo-image-hosting/services/connector"
 	"time"
 )
 
-func ImgUpload(c *gin.Context) {
+func ImgUploadFile(c *gin.Context) {
 	file, err := c.FormFile("qqfile")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -48,7 +49,7 @@ func ImgUpload(c *gin.Context) {
 
 	Base64 := services.ImagesToBase64(filename)
 
-	picUrl, picPath, picSha := connector.RepoCreate().Push(file.Filename,Base64)
+	picUrl, picPath, picSha := connector.RepoCreate().Push(file.Filename, Base64)
 
 	//删除临时图片
 	os.Remove(filename)
@@ -73,14 +74,29 @@ func ImgUpload(c *gin.Context) {
 	})
 }
 
+func ImgUpload(c *gin.Context) {
+	json := request.ImageDto{}
+	_ = c.BindJSON(&json)
+	image := connector.RepoCreate().PushByBase64(json)
+	if image.Url == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"msg":     "上传失败，请检查token与其他配置参数是否正确",
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    image,
+	})
+}
+
 func ImageDel(c *gin.Context) {
 	sha := c.PostForm("sha")
 	_path := c.PostForm("path")
 
-	connector.RepoCreate().Del(_path,sha)
+	connector.RepoCreate().Del(_path, sha)
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    http.StatusOK,
 		"success": true,
 		"data":    map[string]interface{}{},
 	})
